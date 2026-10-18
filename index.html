@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e6edf1;--ink:#142238;--mute:#5b6b7c;--card:#fff;--line:#c9d4dc;--ok:#0f7a5c;--warn:#b86e00;--bad:#b3261e;--accent:#142238}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:20px 16px 48px}
+main{max-width:520px;margin:0 auto}
+h1{font:700 2rem/1.1 "Familjen Grotesk",system-ui,sans-serif;margin:8px 0 4px}
+p.sub{margin:0 0 20px;color:var(--mute)}
+.frame{position:relative;background:#0b1522;border-radius:14px;overflow:hidden;aspect-ratio:1/1;display:grid;place-items:center}
+video{width:100%;height:100%;object-fit:cover;display:none}
+.frame.on video{display:block}
+.frame .hint{color:#9fb2c4;text-align:center;padding:24px;max-width:28ch}
+.frame.on .hint{display:none}
+.frame.on::after{content:"";position:absolute;inset:18%;border:3px solid #fff;border-radius:12px;box-shadow:0 0 0 999px rgba(11,21,34,.45)}
+.row{display:flex;gap:10px;margin:12px 0 20px;flex-wrap:wrap}
+button,label.btn{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 16px;cursor:pointer;background:var(--accent);color:#fff;flex:1 1 140px;text-align:center}
+button.alt,label.btn{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+button:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:3px solid #2f7de1;outline-offset:2px}
+#result{background:var(--card);border-radius:14px;border:1.5px solid var(--line);padding:18px;display:none}
+#result.show{display:block}
+#result[data-lv="0"]{border-color:var(--ok)}
+#result[data-lv="1"]{border-color:var(--warn)}
+#result[data-lv="2"]{border-color:var(--bad)}
+.verdict{font:700 1.25rem "Familjen Grotesk",system-ui,sans-serif;margin:0 0 8px}
+[data-lv="0"] .verdict{color:var(--ok)}[data-lv="1"] .verdict{color:var(--warn)}[data-lv="2"] .verdict{color:var(--bad)}
+.host{font:700 1.4rem/1.2 "Familjen Grotesk",system-ui,sans-serif;word-break:break-all;margin:0 0 4px}
+.full{color:var(--mute);font-size:.85rem;word-break:break-all;margin:0 0 12px}
+ul.why{margin:0 0 14px;padding-left:20px}
+.note{color:var(--mute);font-size:.8rem;margin:12px 0 0}
+h2{font:700 1.1rem "Familjen Grotesk",system-ui,sans-serif;margin:28px 0 8px}
+#hist{list-style:none;margin:0;padding:0}
+#hist li{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+#hist button{background:none;color:var(--ink);padding:0;flex:1;text-align:left;font-weight:500;word-break:break-all;border:0}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+#msg{color:var(--bad);margin:0 0 12px;min-height:1.4em}
+@media (prefers-reduced-motion:no-preference){#result.show{animation:in .2s ease-out}}
+@keyframes in{from{opacity:0;transform:translateY(4px)}}
+.tabs{display:flex;gap:8px;margin:0 0 16px}
+.tabs button{flex:1}
+.tabs button[aria-selected="false"]{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+input[type=text]{font:inherit;width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);margin:0 0 8px}
+#prev{display:block;max-width:100%;max-height:220px;border-radius:12px;margin:0 0 12px}
+#out{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:18px;text-align:center}
+#out canvas{width:100%;max-width:300px;height:auto;image-rendering:pixelated}
+#out .full{text-align:left}
+details{margin:16px 0;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
+summary{cursor:pointer;font-weight:600}
+details ol{padding-left:20px;margin:10px 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>QR Check</h1>
+  <p class="sub">Scan a QR code and see where it goes before you open it, or make your own.</p>
+  <div class="tabs" role="tablist">
+    <button data-tab="scan" aria-selected="true" role="tab">Scan</button>
+    <button data-tab="make" aria-selected="false" role="tab">Make QR</button>
+  </div>
+  <div id="scan">
+
+  <div class="frame" id="frame">
+    <video id="v" playsinline muted></video>
+    <p class="hint">Press Start camera and point it at a QR code.</p>
+  </div>
+  <div class="row">
+    <button id="start">Start camera</button>
+    <label class="btn" for="file">Scan from image</label>
+    <input id="file" type="file" accept="image/*" hidden>
+  </div>
+  <p id="msg" role="status"></p>
+
+  <section id="result" aria-live="polite">
+    <p class="verdict" id="verdict"></p>
+    <p class="host" id="host"></p>
+    <p class="full" id="full"></p>
+    <ul class="why" id="why"></ul>
+    <div class="row" style="margin:0">
+      <button id="open" class="alt">Open link</button>
+      <button id="copy" class="alt">Copy</button>
+    </div>
+    <p class="note">No checker is perfect. Only open links from sources you trust.</p>
+  </section>
+
+  <h2>Recent scans</h2>
+  <ul id="hist"></ul>
+  </div>
+
+  <div id="make" hidden>
+    <label class="btn" for="img" style="display:block;margin:0 0 12px">Choose image</label>
+    <input id="img" type="file" accept="image/*" hidden>
+    <img id="prev" alt="Selected image preview" hidden>
+    <div class="row" style="margin-top:0"><button id="mk">Make QR from image</button></div>
+    <p id="mkmsg" role="status" style="color:var(--bad);min-height:1.4em;margin:0 0 8px"></p>
+
+    <details id="setup">
+      <summary>One-time setup: free Cloudinary storage</summary>
+      <p class="note">A QR code can't hold a photo, so the image is uploaded and the QR holds its link. Anyone with the link can see the image.</p>
+      <ol>
+        <li>Make a free account at cloudinary.com.</li>
+        <li>Settings, then Upload, then Add upload preset. Set Signing mode to <b>Unsigned</b> and save.</li>
+        <li>Paste your cloud name (on the dashboard) and the preset name below.</li>
+      </ol>
+      <input id="cn" type="text" placeholder="Cloud name" autocomplete="off">
+      <input id="cp" type="text" placeholder="Upload preset name" autocomplete="off">
+    </details>
+
+    <div id="out" hidden>
+      <div id="qr"></div>
+      <p class="full" id="url"></p>
+      <div class="row" style="margin:0">
+        <button id="dl" class="alt">Download PNG</button>
+        <button id="cpurl" class="alt">Copy link</button>
+      </div>
+    </div>
+
+    <h2>Or make a QR from a link or text</h2>
+    <input id="txt" type="text" placeholder="https://example.com" autocomplete="off">
+    <div class="row" style="margin-top:0"><button id="mkt" class="alt">Make QR</button></div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const video = $('#v'), frame = $('#frame');
+const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+let stream = null, scanning = false, current = null;
+
+const SHORT = ['bit.ly','tinyurl.com','t.co','goo.gl','is.gd','cutt.ly','rb.gy','ow.ly','buff.ly','shorturl.at','tiny.cc'];
+const BADTLD = ['zip','mov','top','xyz','click','work','support','country','gq','tk','ml','cf'];
+const WORDS = ['login','verify','secure','account','wallet','update','bonus','prize'];
+const COLORS = ['var(--ok)','var(--warn)','var(--bad)'];
+
+function msg(t){ $('#msg').textContent = t || ''; }
+
+async function startCam(){
+  msg('');
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream; await video.play();
+    frame.classList.add('on'); scanning = true; $('#start').textContent = 'Stop camera'; tick();
+  }catch(e){
+    msg('Camera is blocked or unavailable. Allow camera access (needs https or localhost), or use Scan from image.');
+  }
+}
+function stopCam(){
+  scanning = false;
+  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  frame.classList.remove('on'); $('#start').textContent = 'Start camera';
+}
+function tick(){
+  if(!scanning) return;
+  if(video.readyState === video.HAVE_ENOUGH_DATA){
+    cv.width = video.videoWidth; cv.height = video.videoHeight;
+    cx.drawImage(video, 0, 0);
+    const d = cx.getImageData(0, 0, cv.width, cv.height);
+    const c = jsQR(d.data, d.width, d.height);
+    if(c && c.data){ stopCam(); handle(c.data); return; }
+  }
+  requestAnimationFrame(tick);
+}
+
+$('#start').onclick = () => scanning ? stopCam() : startCam();
+
+$('#file').onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const img = new Image();
+  img.onload = () => {
+    cv.width = img.width; cv.height = img.height; cx.drawImage(img, 0, 0);
+    const d = cx.getImageData(0, 0, cv.width, cv.height);
+    const c = jsQR(d.data, d.width, d.height, { inversionAttempts: 'attemptBoth' });
+    if(c && c.data){ msg(''); handle(c.data); } else msg('No QR code found in that image. Try a sharper or closer photo.');
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(f); e.target.value = '';
+};
+
+function analyze(raw){
+  let u; try{ u = new URL(raw); }catch(e){ u = null; }
+  if(!u || !/^https?:$/.test(u.protocol)) return { kind: 'text', level: 0, host: 'Text, not a web link', reasons: [] };
+  const r = [], host = u.hostname.toLowerCase(); let lv = 0;
+  const flag = (l, t) => { r.push(t); lv = Math.max(lv, l); };
+  if(u.protocol === 'http:') flag(1, 'Not encrypted (http, not https).');
+  if(/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) flag(2, 'Goes to a raw IP address, not a named website.');
+  if(host.includes('xn--')) flag(2, 'Domain uses look-alike characters (punycode).');
+  if(u.username || u.password) flag(2, 'Link has a hidden login part before the real address.');
+  if(SHORT.includes(host)) flag(1, 'Shortened link: the real destination is hidden.');
+  const tld = host.split('.').pop();
+  if(BADTLD.includes(tld)) flag(1, 'Ending ".' + tld + '" is often used in scams.');
+  if(host.split('.').length > 4) flag(1, 'Unusually many subdomains.');
+  const hit = WORDS.find(w => host.includes(w));
+  if(hit) flag(1, 'Domain contains "' + hit + '", a common bait word.');
+  if(raw.length > 200) flag(1, 'Very long link.');
+  if(!r.length) r.push('No warning signs found by these basic checks.');
+  return { kind: 'url', level: lv, host, reasons: r, url: u.href };
+}
+
+function handle(raw){
+  const a = analyze(raw); current = { raw, a };
+  const res = $('#result'); res.className = 'show'; res.dataset.lv = a.level;
+  $('#verdict').textContent = a.kind === 'text' ? 'QR contains text' : ['Looks okay', 'Be careful', "Don't open"][a.level];
+  $('#host').textContent = a.host;
+  $('#full').textContent = raw;
+  const ul = $('#why'); ul.textContent = '';
+  a.reasons.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+  $('#open').style.display = a.kind === 'url' ? '' : 'none';
+  save(raw, a.level); renderHist();
+}
+
+$('#open').onclick = () => {
+  if(!current || current.a.kind !== 'url') return;
+  if(current.a.level > 0 && !confirm('This link has warning signs. Open it anyway?')) return;
+  window.open(current.a.url, '_blank', 'noopener,noreferrer');
+};
+$('#copy').onclick = async () => {
+  try{ await navigator.clipboard.writeText(current.raw); $('#copy').textContent = 'Copied'; setTimeout(() => $('#copy').textContent = 'Copy', 1200); }
+  catch(e){ msg('Copy failed. Select the text above and copy it by hand.'); }
+};
+
+function load(){ try{ return JSON.parse(localStorage.getItem('qrcheck') || '[]'); }catch(e){ return []; } }
+function save(raw, lv){
+  try{
+    const h = load().filter(x => x.raw !== raw); h.unshift({ raw, lv });
+    localStorage.setItem('qrcheck', JSON.stringify(h.slice(0, 15)));
+  }catch(e){}
+}
+function renderHist(){
+  const ul = $('#hist'); ul.textContent = '';
+  const h = load();
+  if(!h.length){ const li = document.createElement('li'); li.textContent = 'Nothing scanned yet.'; ul.appendChild(li); return; }
+  h.forEach(x => {
+    const li = document.createElement('li'), d = document.createElement('span'), b = document.createElement('button');
+    d.className = 'dot'; d.style.background = COLORS[x.lv];
+    b.textContent = x.raw; b.onclick = () => handle(x.raw);
+    li.append(d, b); ul.appendChild(li);
+  });
+}
+renderHist();
+
+/* ---------- Make QR ---------- */
+let madeCanvas = null, madeText = '';
+const say = t => { $('#mkmsg').textContent = t || ''; };
+
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {
+  stopCam();
+  ['scan', 'make'].forEach(id => { $('#' + id).hidden = id !== b.dataset.tab; });
+  document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === b));
+});
+
+try{
+  const s = JSON.parse(localStorage.getItem('qrcheck-cld') || '{}');
+  $('#cn').value = s.cn || ''; $('#cp').value = s.cp || '';
+}catch(e){}
+const saveCld = () => { try{ localStorage.setItem('qrcheck-cld', JSON.stringify({ cn: $('#cn').value.trim(), cp: $('#cp').value.trim() })); }catch(e){} };
+$('#cn').oninput = saveCld; $('#cp').oninput = saveCld;
+
+$('#img').onchange = e => {
+  const f = e.target.files[0], p = $('#prev');
+  if(!f){ p.hidden = true; return; }
+  p.src = URL.createObjectURL(f); p.hidden = false; say('');
+};
+
+function drawQR(text){
+  let qr;
+  try{ qr = qrcode(0, 'M'); qr.addData(text); qr.make(); }
+  catch(e){ say('That is too long for a QR code. Use a shorter link or text.'); return; }
+  const px = 8, m = 4, n = qr.getModuleCount(), size = (n + m * 2) * px;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
+  for(let r = 0; r < n; r++) for(let k = 0; k < n; k++) if(qr.isDark(r, k)) g.fillRect((k + m) * px, (r + m) * px, px, px);
+  c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'QR code for ' + text);
+  $('#qr').replaceChildren(c);
+  $('#url').textContent = text; $('#out').hidden = false;
+  madeCanvas = c; madeText = text; say('');
+}
+
+$('#mk').onclick = async () => {
+  const f = $('#img').files[0], cn = $('#cn').value.trim(), cp = $('#cp').value.trim();
+  if(!f){ say('Choose an image first.'); return; }
+  if(!cn || !cp){ $('#setup').open = true; say('Add your Cloudinary cloud name and upload preset first.'); return; }
+  if(f.size > 10 * 1024 * 1024){ say('That image is over 10 MB. Pick a smaller one.'); return; }
+  $('#mk').disabled = true; say('Uploading...');
+  try{
+    const fd = new FormData(); fd.append('file', f); fd.append('upload_preset', cp);
+    const r = await fetch('https://api.cloudinary.com/v1_1/' + encodeURIComponent(cn) + '/image/upload', { method: 'POST', body: fd });
+    const j = await r.json();
+    if(!r.ok || !j.secure_url) throw new Error((j.error && j.error.message) || 'Upload failed');
+    drawQR(j.secure_url);
+  }catch(e){
+    say('Upload failed: ' + e.message + '. Check the cloud name, and that the preset is set to Unsigned.');
+  }
+  $('#mk').disabled = false;
+};
+
+$('#mkt').onclick = () => {
+  const t = $('#txt').value.trim();
+  if(!t){ say('Type a link or some text first.'); return; }
+  drawQR(t);
+};
+
+$('#dl').onclick = () => {
+  if(!madeCanvas) return;
+  madeCanvas.toBlob(b => {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'qr-code.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+};
+$('#cpurl').onclick = async () => {
+  try{ await navigator.clipboard.writeText(madeText); $('#cpurl').textContent = 'Copied'; setTimeout(() => $('#cpurl').textContent = 'Copy link', 1200); }
+  catch(e){ say('Copy failed. Select the link above and copy it by hand.'); }
+};
+</script>
+</body>
+</html>
