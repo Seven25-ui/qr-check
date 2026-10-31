@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QR Check</title>
+<meta name="theme-color" content="#E95420">
+<link rel="manifest" href="/qr-check/manifest.json">
+<link rel="icon" type="image/png" href="/qr-check/icon-192.png">
+<link rel="apple-touch-icon" href="/qr-check/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -56,12 +60,18 @@ input[type=text]{font:inherit;width:100%;padding:11px 12px;border:1.5px solid va
 details{margin:16px 0;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
 summary{cursor:pointer;font-weight:600}
 details ol{padding-left:20px;margin:10px 0}
+/* Download app button (Android browser only, hidden inside the app) */
+.dl-app{display:flex;align-items:center;justify-content:center;gap:8px;background:#E95420;color:#fff;text-decoration:none;font-weight:700;border-radius:10px;padding:12px 16px;margin:0 0 16px}
+.dl-app[hidden]{display:none}
 </style>
 </head>
 <body>
 <main>
   <h1>QR Check</h1>
   <p class="sub">Scan a QR code and see where it goes before you open it, or make your own.</p>
+
+  <a id="apk-dl" class="dl-app" href="/qr-check/QR-Check.apk" download="QR-Check.apk" hidden>📥 Click here to download the Android app</a>
+
   <div class="tabs" role="tablist">
     <button data-tab="scan" aria-selected="true" role="tab">Scan</button>
     <button data-tab="make" aria-selected="false" role="tab">Make QR</button>
@@ -330,6 +340,29 @@ $('#cpurl').onclick = async () => {
   try{ await navigator.clipboard.writeText(madeText); $('#cpurl').textContent = 'Copied'; setTimeout(() => $('#cpurl').textContent = 'Copy link', 1200); }
   catch(e){ say('Copy failed. Select the link above and copy it by hand.'); }
 };
+
+/* ---------- Android app download button ----------
+   Mogawas lang sa Android browser. Mawala kung naka-open na sa sulod sa app (TWA/standalone).
+   Gigamit ang sessionStorage (dili localStorage) para dili ma-hide sa tibuok Chrome. */
+(function(){
+  const btn = document.getElementById('apk-dl');
+  if(!btn) return;
+  let inApp = false;
+  try{
+    if(document.referrer.indexOf('android-app://') === 0) sessionStorage.setItem('qrcheck-inapp', '1');
+    inApp = sessionStorage.getItem('qrcheck-inapp') === '1';
+  }catch(e){
+    inApp = document.referrer.indexOf('android-app://') === 0;
+  }
+  const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  if(isAndroid && !inApp && !standalone) btn.hidden = false;
+})();
+
+/* ---------- Service worker (PWA) ---------- */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/qr-check/sw.js', { scope: '/qr-check/' });
+}
 </script>
 </body>
 </html>
